@@ -17,12 +17,17 @@ RUN apt-get update -qqy && \
 # Setup args
 ARG TARGETPLATFORM
 ARG TARGETARCH
+ARG HF_TOKEN
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=UTF-8
 ENV TARGETARCH=${TARGETARCH}
+ENV PORT=7860
+ENV GRADIO_SERVER_PORT=7860
+ENV GRADIO_SERVER_NAME=0.0.0.0
+ENV HF_TOKEN=${HF_TOKEN}
 
 # Create working directory
 WORKDIR /app
@@ -38,7 +43,7 @@ COPY . /app
 COPY launch.sh /app/launch.sh
 COPY .env.example /app/.env
 
-# Install pip packages
+# Install pip packages with specific chromadb version to fix compatibility issues
 RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/pip  \
     pip install -e "libs/kotaemon" \
@@ -54,6 +59,9 @@ RUN apt-get autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf ~/.cache
+
+# Create volume directory
+RUN mkdir -p /app/ktem_app_data && chmod 777 /app/ktem_app_data
 
 ENTRYPOINT ["sh", "/app/launch.sh"]
 
@@ -86,7 +94,7 @@ RUN --mount=type=ssh  \
 ENV USE_LIGHTRAG=true
 RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/pip  \
-    pip install aioboto3 nano-vectordb ollama xxhash "lightrag-hku<=1.3.0"
+    pip install aioboto3 nano-vectordb xxhash "lightrag-hku<=1.3.0"
 
 RUN --mount=type=ssh  \
     --mount=type=cache,target=/root/.cache/pip  \
@@ -102,17 +110,11 @@ RUN apt-get autoremove \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf ~/.cache
 
-ENTRYPOINT ["sh", "/app/launch.sh"]
+# Set environment variables
+ENV FLY_APP=true
+ENV KH_FEATURE_USER_MANAGEMENT=true
+ENV KH_SSO_ENABLED=false
 
-# Ollama-bundled version
-FROM full AS ollama
-
-# Install ollama
-RUN --mount=type=ssh  \
-    --mount=type=cache,target=/root/.cache/pip  \
-    curl -fsSL https://ollama.com/install.sh | sh
-
-# RUN nohup bash -c "ollama serve &" && sleep 4 && ollama pull qwen2.5:7b
-RUN nohup bash -c "ollama serve &" && sleep 4 && ollama pull nomic-embed-text
+VOLUME /app/ktem_app_data
 
 ENTRYPOINT ["sh", "/app/launch.sh"]
